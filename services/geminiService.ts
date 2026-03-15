@@ -32,62 +32,108 @@ export const generateInfographic = async (
     Do not produce photorealistic images unless the style specifically requests it. Focus on graphic design, clarity, and the requested aesthetic.
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: {
-        parts: [
-          {
-            text: prompt,
-          },
-        ],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: aspectRatio,
-          imageSize: "1K",
-        },
-        // responseMimeType and responseSchema are NOT supported for image generation models
-      },
-    });
+  let attempts = 0;
+  const maxAttempts = 4;
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Check if we have candidates
-    if (!response.candidates || response.candidates.length === 0) {
-      // Check for finish reason if available
-      const finishReason = response.candidates?.[0]?.finishReason;
+  while (attempts < maxAttempts) {
+    try {
+      // Слегка варьируем промпт при повторных попытках, чтобы изменить хэш запроса на бэкенде
+      const variedPrompt = attempts > 0 
+        ? `${prompt}\n\n(Variation: ${Math.random().toString(36).substring(7)})` 
+        : prompt;
+
+      // На последних попытках пробуем уменьшить разрешение, если это Flash модель
+      const currentImageSize = (attempts >= 2 && modelName.includes('flash')) ? "512px" : "1K";
+
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: {
+          parts: [
+            {
+              text: variedPrompt,
+            },
+          ],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: aspectRatio,
+            imageSize: currentImageSize as any,
+          },
+        },
+      });
+
+      const candidate = response.candidates?.[0];
+      
+      if (!candidate) {
+        throw new Error("Модель не вернула ни одного варианта ответа.");
+      }
+
+      const finishReason = candidate.finishReason;
+      
+      // Если это временная ошибка IMAGE_OTHER, пробуем еще раз с экспоненциальной задержкой
+      if (finishReason === 'IMAGE_OTHER' && attempts < maxAttempts - 1) {
+        attempts++;
+        const backoffDelay = Math.pow(2, attempts) * 1000;
+        console.warn(`Попытка ${attempts} не удалась (IMAGE_OTHER), повторяю через ${backoffDelay/1000} сек...`);
+        await delay(backoffDelay);
+        continue; 
+      }
+
       if (finishReason === 'SAFETY') {
-        throw new Error("Запрос заблокирован фильтрами безопасности. Попробуйте изменить тему.");
+        throw new Error("Запрос заблокирован фильтрами безопасности. Попробуйте изменить тему или описание.");
       }
       if (finishReason === 'RECITATION') {
-        throw new Error("Запрос заблокирован из-за нарушения авторских прав.");
+        throw new Error("Запрос заблокирован из-за обнаружения защищенного авторским правом контента.");
       }
-      throw new Error("Модель не вернула ответ. Попробуйте еще раз или измените запрос.");
-    }
 
-    const parts = response.candidates[0].content?.parts;
-    
-    if (!parts || parts.length === 0) {
-      throw new Error("Модель вернула пустой ответ (нет данных изображения).");
-    }
-
-    for (const part of parts) {
-      if (part.inlineData && part.inlineData.data) {
-        const base64EncodeString = part.inlineData.data;
-        const mimeType = part.inlineData.mimeType || 'image/png';
-        return `data:${mimeType};base64,${base64EncodeString}`;
+      const parts = candidate.content?.parts;
+      
+      if (!parts || parts.length === 0) {
+        if (finishReason && finishReason !== 'STOP') {
+          throw new Error(`Генерация прервана. Причина: ${finishReason}`);
+        }
+        throw new Error("Модель вернула пустой ответ (нет данных изображения).");
       }
-    }
 
-    throw new Error("Данные изображения не найдены в ответе модели.");
+      let textFeedback = "";
+      for (const part of parts) {
+        if (part.inlineData && part.inlineData.data) {
+          const base64EncodeString = part.inlineData.data;
+          const mimeType = part.inlineData.mimeType || 'image/png';
+          return `data:${mimeType};base64,${base64EncodeString}`;
+        }
+        if (part.text) {
+          textFeedback += part.text + " ";
+        }
+      }
 
-  } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    // Throw a cleaner error message
-    if (error.message && error.message.includes("Requested entity was not found")) {
-      throw new Error("API Key Error: Please select a valid project/key.");
+      if (textFeedback.trim()) {
+        throw new Error(`Изображение не создано. Ответ модели: ${textFeedback.trim()}`);
+      }
+
+      throw new Error("Данные изображения не найдены в ответе модели.");
+
+    } catch (error: any) {
+      // Если это последняя попытка или ошибка не связана с IMAGE_OTHER, выбрасываем её
+      const isImageOther = error.message && error.message.includes("IMAGE_OTHER");
+      
+      if (attempts >= maxAttempts - 1 || !isImageOther) {
+        console.error("Gemini API Error:", error);
+        if (error.message && error.message.includes("Requested entity was not found")) {
+          throw new Error("Ошибка API ключа: Пожалуйста, выберите валидный проект/ключ.");
+        }
+        throw new Error(error.message || "Не удалось создать инфографику.");
+      }
+      
+      attempts++;
+      const backoffDelay = Math.pow(2, attempts) * 1000;
+      console.warn(`Попытка ${attempts} не удалась, повторяю через ${backoffDelay/1000} сек...`, error);
+      await delay(backoffDelay);
     }
-    throw new Error(error.message || "Failed to generate infographic.");
   }
+  
+  throw new Error("Не удалось создать изображение после нескольких попыток.");
 };
 
 export const rewriteText = async (text: string): Promise<string> => {
