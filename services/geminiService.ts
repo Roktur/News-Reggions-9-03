@@ -27,7 +27,8 @@ export const generateInfographic = async (
     2. Accuracy: Ensure spelling and grammar are perfect.
     3. Accessibility: The content must be easy to understand for all ages.
     4. Layout: Clear hierarchy, using icons and large text for key points.
-    5. Temporal Context: The current year is 2026. If the topic implies current events or dates, ensure the visual context aligns with the year 2026. Do not use outdated years unless historically relevant.
+    5. Temporal Context: The current year is 2026. Use this ONLY for background context. DO NOT explicitly write "2026" on the image unless the user's topic specifically includes it. Do not invent dates.
+    6. Strict Text Adherence: ONLY use the text provided in the "Topic". DO NOT invent, hallucinate, or add any extra words, phrases, or sentences to the image. If the topic is short, keep the text on the image short. Do not fill empty space with made-up text.
     ${watermarkInstruction}
     
     Do not produce photorealistic images unless the style specifically requests it. Focus on graphic design, clarity, and the requested aesthetic.
@@ -145,7 +146,7 @@ export const rewriteText = async (text: string): Promise<string> => {
       model: 'gemini-3-flash-preview',
       contents: `Ты профессиональный редактор. Твоя задача - переписать (сделать рерайт) предоставленного текста на русском языке.
       
-      Контекст времени: Сейчас 2026 год. Учитывай это при редактировании текста, если в нем упоминаются текущие события, даты или относительное время (например, "в прошлом году", "сейчас").
+      Контекст времени: Сейчас 2026 год. Используй это ТОЛЬКО для правильного понимания относительного времени (например, чтобы понять, что "в прошлом году" = 2025). КАТЕГОРИЧЕСКИ ЗАПРЕЩАЕТСЯ добавлять упоминание 2026 года или других дат в текст, если их не было в исходнике или они не требуются по смыслу. Не придумывай даты.
       
       Требования:
       1. Полностью сохрани исходный смысл и факты.
