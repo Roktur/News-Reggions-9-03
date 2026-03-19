@@ -28,7 +28,7 @@ export const generateInfographic = async (
     3. Accessibility: The content must be easy to understand for all ages.
     4. Layout: Clear hierarchy, using icons and large text for key points.
     5. Temporal Context: The current year is 2026. Use this ONLY for background context. DO NOT explicitly write "2026" on the image unless the user's topic specifically includes it. Do not invent dates.
-    6. Strict Text Adherence: ONLY use the text provided in the "Topic". DO NOT invent, hallucinate, or add any extra words, phrases, or sentences to the image. If the topic is short, keep the text on the image short. Do not fill empty space with made-up text.
+    6. Text Additions: You MUST include the main text provided in the "Topic". You MAY add short, punchy extra text (like labels, callouts, reactions, or short facts) IF AND ONLY IF it is highly relevant to the topic and directly enhances the message. DO NOT add random, meaningless, or hallucinated text just to fill space. Any added text must make logical sense in the context of the news.
     ${watermarkInstruction}
     
     Do not produce photorealistic images unless the style specifically requests it. Focus on graphic design, clarity, and the requested aesthetic.
