@@ -115,6 +115,43 @@ const StyleManager: React.FC<StyleManagerProps> = ({ customStyles, onSave, onClo
   const [formLabel, setFormLabel] = useState('');
   const [formPrompt, setFormPrompt] = useState('');
   const [formError, setFormError] = useState('');
+  const [importError, setImportError] = useState('');
+
+  const handleExport = () => {
+    const pureCustoms = customs.filter(c => !BUILTIN_STYLES.some(b => b.id === c.id));
+    const blob = new Blob([JSON.stringify(pureCustoms, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'my_styles.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImportError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string);
+        if (!Array.isArray(parsed)) throw new Error();
+        const valid = parsed.filter((s: any) => s.id && s.label && s.prompt);
+        if (valid.length === 0) throw new Error();
+        const merged = [...customs];
+        valid.forEach((s: InfographicStyle) => {
+          if (!merged.some(c => c.id === s.id)) merged.push({ ...s, isCustom: true });
+        });
+        setCustoms(merged);
+        onSave(merged);
+      } catch {
+        setImportError('Неверный формат файла.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Merged list: built-ins overridden by any same-id custom, then pure customs appended
   const overrideMap = new Map<string, InfographicStyle>(customs.map(s => [s.id, s]));
@@ -136,24 +173,31 @@ const StyleManager: React.FC<StyleManagerProps> = ({ customStyles, onSave, onClo
     if (!formLabel.trim()) { setFormError('Введите название стиля.'); return; }
     if (!formPrompt.trim()) { setFormError('Введите промпт стиля.'); return; }
     setFormError('');
+    let newCustoms: InfographicStyle[];
     if (editing) {
       // Save as override (same id) or update existing custom
       const updated = { ...editing, icon: formIcon, label: formLabel, prompt: formPrompt, isCustom: true };
-      setCustoms(prev => prev.some(c => c.id === editing.id)
-        ? prev.map(c => c.id === editing.id ? updated : c)
-        : [...prev, updated]);
+      newCustoms = customs.some(c => c.id === editing.id)
+        ? customs.map(c => c.id === editing.id ? updated : c)
+        : [...customs, updated];
     } else {
-      setCustoms(prev => [...prev, { id: `custom_${Date.now()}`, label: formLabel, icon: formIcon, prompt: formPrompt, isCustom: true }]);
+      newCustoms = [...customs, { id: `custom_${Date.now()}`, label: formLabel, icon: formIcon, prompt: formPrompt, isCustom: true }];
     }
+    setCustoms(newCustoms);
+    onSave(newCustoms);
     setEditing(null); setCreating(false);
   };
 
   const handleReset = (id: string) => {
-    setCustoms(prev => prev.filter(c => c.id !== id));
+    const newCustoms = customs.filter(c => c.id !== id);
+    setCustoms(newCustoms);
+    onSave(newCustoms);
   };
 
   const handleDelete = (id: string) => {
-    setCustoms(prev => prev.filter(c => c.id !== id));
+    const newCustoms = customs.filter(c => c.id !== id);
+    setCustoms(newCustoms);
+    onSave(newCustoms);
   };
 
   const showForm = editing !== null || creating;
@@ -238,9 +282,19 @@ const StyleManager: React.FC<StyleManagerProps> = ({ customStyles, onSave, onClo
             </div>
           )}
         </div>
-        <div className="p-6 border-t border-[#333] flex gap-3">
-          <button onClick={() => { onSave(customs); onClose(); }} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors">Применить</button>
-          <button onClick={onClose} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors">Закрыть</button>
+        <div className="p-6 border-t border-[#333] space-y-3">
+          {importError && <p className="text-red-400 text-xs">{importError}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleExport} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-colors">⬇ Экспорт</button>
+            <label className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-colors text-center cursor-pointer">
+              ⬆ Импорт
+              <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => { onSave(customs); onClose(); }} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors">Применить</button>
+            <button onClick={onClose} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors">Закрыть</button>
+          </div>
         </div>
       </div>
     </div>
