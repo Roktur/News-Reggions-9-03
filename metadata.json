@@ -1,0 +1,5 @@
+{
+  "name": "News Regions",
+  "description": "Generates educational infographics in Russian with selectable aspect ratios (1:1, 3:4, 9:16, 16:9) using the Nano Banana 2 model.",
+  "requestFramePermissions": []
+}
